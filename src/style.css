@@ -1,5 +1,34 @@
-.icon {
-  width: 64px;
-  vertical-align: top;
-  border: 1px solid salmon;
+:root {
+  --bg: #fffaf0;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  font-family: sans-serif;
+}
+
+/* center layout */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 16px;
+}
+
+/* title */
+.app-title {
+  font-size: 1.8rem;
+  margin: 0;
+}
+
+/* canvas style (required: border) */
+.draw-canvas {
+  width: 256px;
+  height: 256px;
+  border: 1px solid black;
+  border-radius: 8px; /* optional */
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15)); /* optional */
 }
