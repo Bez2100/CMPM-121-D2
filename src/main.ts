@@ -20,28 +20,47 @@ document.addEventListener("DOMContentLoaded", () => {
   ctx.lineCap = "round";
   ctx.strokeStyle = "#000";
 
-  // ----- Clear Button -----
+  // ----- Buttons -----
   const clearBtn = document.createElement("button");
   clearBtn.className = "clear-button";
   clearBtn.textContent = "Clear";
 
+  const undoBtn = document.createElement("button");
+  undoBtn.className = "undo-button";
+  undoBtn.textContent = "Undo";
+
+  const redoBtn = document.createElement("button");
+  redoBtn.className = "redo-button";
+  redoBtn.textContent = "Redo";
+
+  // Add elements to root
   root.appendChild(title);
   root.appendChild(canvas);
-  root.appendChild(clearBtn);
+
+  const btnRow = document.createElement("div");
+  btnRow.className = "button-row";
+  btnRow.appendChild(undoBtn);
+  btnRow.appendChild(redoBtn);
+  btnRow.appendChild(clearBtn);
+
+  root.appendChild(btnRow);
   document.body.appendChild(root);
 
   // ====================================================
-  // STEP 3 – DATA MODEL FOR DRAWING
+  // DATA MODEL (expanded for undo/redo)
   // ====================================================
   type Point = { x: number; y: number };
   type Stroke = Point[];
 
-  const strokes: Stroke[] = [];
-  let currentStroke: Stroke | null = null;
+  const strokes: Stroke[] = []; // display list
+  const redoStack: Stroke[] = []; // undo → redo
 
+  let currentStroke: Stroke | null = null;
   let isDrawing = false;
 
-  // ----- Draw observer -----
+  // ====================================================
+  // DRAWING OBSERVER
+  // ====================================================
   function redrawCanvas() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -50,7 +69,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (stroke.length === 0) continue;
 
       ctx.moveTo(stroke[0].x, stroke[0].y);
-
       for (let i = 1; i < stroke.length; i++) {
         ctx.lineTo(stroke[i].x, stroke[i].y);
       }
@@ -58,11 +76,10 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.stroke();
   }
 
-  // Listen for the custom event
   canvas.addEventListener("drawing-changed", redrawCanvas);
 
   // ====================================================
-  // MOUSE HANDLING (now using the model instead of direct drawing)
+  // MOUSE EVENTS USING DATA MODEL
   // ====================================================
   canvas.addEventListener("mousedown", (e) => {
     isDrawing = true;
@@ -70,8 +87,10 @@ document.addEventListener("DOMContentLoaded", () => {
     currentStroke = [];
     strokes.push(currentStroke);
 
-    const point = { x: e.offsetX, y: e.offsetY };
-    currentStroke.push(point);
+    // Once you start drawing a new stroke, redo history is invalid
+    redoStack.length = 0;
+
+    currentStroke.push({ x: e.offsetX, y: e.offsetY });
 
     canvas.dispatchEvent(new Event("drawing-changed"));
   });
@@ -79,10 +98,7 @@ document.addEventListener("DOMContentLoaded", () => {
   canvas.addEventListener("mousemove", (e) => {
     if (!isDrawing || !currentStroke) return;
 
-    const point = { x: e.offsetX, y: e.offsetY };
-    currentStroke.push(point);
-
-    // Only redraw when a new point is added
+    currentStroke.push({ x: e.offsetX, y: e.offsetY });
     canvas.dispatchEvent(new Event("drawing-changed"));
   });
 
@@ -97,11 +113,33 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ====================================================
-  // CLEAR BUTTON
+  // BUTTONS
   // ====================================================
+
+  // ----- CLEAR -----
   clearBtn.addEventListener("click", () => {
-    strokes.length = 0; // clear array
-    currentStroke = null;
+    strokes.length = 0;
+    redoStack.length = 0;
+    canvas.dispatchEvent(new Event("drawing-changed"));
+  });
+
+  // ----- UNDO -----
+  undoBtn.addEventListener("click", () => {
+    if (strokes.length === 0) return; // nothing to undo
+
+    const undone = strokes.pop()!; // remove last stroke
+    redoStack.push(undone); // move it to redo stack
+
+    canvas.dispatchEvent(new Event("drawing-changed"));
+  });
+
+  // ----- REDO -----
+  redoBtn.addEventListener("click", () => {
+    if (redoStack.length === 0) return; // nothing to redo
+
+    const restored = redoStack.pop()!; // take last undone stroke
+    strokes.push(restored); // add it back
+
     canvas.dispatchEvent(new Event("drawing-changed"));
   });
 });
