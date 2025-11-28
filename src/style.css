@@ -32,3 +32,16 @@ body {
   border-radius: 8px; /* optional */
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15)); /* optional */
 }
+.clear-button {
+  padding: 8px 16px;
+  font-size: 1rem;
+  cursor: pointer;
+  border: none;
+  border-radius: 6px;
+  background: #ffce73;
+  transition: 0.2s;
+}
+
+.clear-button:hover {
+  background: #ffc04a;
+}
