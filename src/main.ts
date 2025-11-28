@@ -25,39 +25,83 @@ document.addEventListener("DOMContentLoaded", () => {
   clearBtn.className = "clear-button";
   clearBtn.textContent = "Clear";
 
-  // Add elements to root
   root.appendChild(title);
   root.appendChild(canvas);
   root.appendChild(clearBtn);
-
-  // Add root to page
   document.body.appendChild(root);
 
-  // ========== DRAWING LOGIC ==========
+  // ====================================================
+  // STEP 3 – DATA MODEL FOR DRAWING
+  // ====================================================
+  type Point = { x: number; y: number };
+  type Stroke = Point[];
+
+  const strokes: Stroke[] = [];
+  let currentStroke: Stroke | null = null;
+
   let isDrawing = false;
 
+  // ----- Draw observer -----
+  function redrawCanvas() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.beginPath();
+    for (const stroke of strokes) {
+      if (stroke.length === 0) continue;
+
+      ctx.moveTo(stroke[0].x, stroke[0].y);
+
+      for (let i = 1; i < stroke.length; i++) {
+        ctx.lineTo(stroke[i].x, stroke[i].y);
+      }
+    }
+    ctx.stroke();
+  }
+
+  // Listen for the custom event
+  canvas.addEventListener("drawing-changed", redrawCanvas);
+
+  // ====================================================
+  // MOUSE HANDLING (now using the model instead of direct drawing)
+  // ====================================================
   canvas.addEventListener("mousedown", (e) => {
     isDrawing = true;
-    ctx.beginPath();
-    ctx.moveTo(e.offsetX, e.offsetY);
+
+    currentStroke = [];
+    strokes.push(currentStroke);
+
+    const point = { x: e.offsetX, y: e.offsetY };
+    currentStroke.push(point);
+
+    canvas.dispatchEvent(new Event("drawing-changed"));
   });
 
   canvas.addEventListener("mousemove", (e) => {
-    if (!isDrawing) return;
-    ctx.lineTo(e.offsetX, e.offsetY);
-    ctx.stroke();
+    if (!isDrawing || !currentStroke) return;
+
+    const point = { x: e.offsetX, y: e.offsetY };
+    currentStroke.push(point);
+
+    // Only redraw when a new point is added
+    canvas.dispatchEvent(new Event("drawing-changed"));
   });
 
   canvas.addEventListener("mouseup", () => {
     isDrawing = false;
+    currentStroke = null;
   });
 
   canvas.addEventListener("mouseleave", () => {
     isDrawing = false;
+    currentStroke = null;
   });
 
-  // ========== CLEAR BUTTON ==========
+  // ====================================================
+  // CLEAR BUTTON
+  // ====================================================
   clearBtn.addEventListener("click", () => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    strokes.length = 0; // clear array
+    currentStroke = null;
+    canvas.dispatchEvent(new Event("drawing-changed"));
   });
 });
