@@ -32,7 +32,7 @@ body {
   border-radius: 8px; /* optional */
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15));
 }
-.clear-button, .redo-button, .undo-button {
+.clear-button, .redo-button, .undo-button, .thin-button, .thick-button {
   padding: 8px 16px;
   font-size: 1rem;
   cursor: pointer;
@@ -44,6 +44,8 @@ body {
 
 .clear-button:hover,
 .undo-button:hover,
-.redo-button:hover {
+.redo-button:hover,
+.thin-button:hover,
+.thick-button:hover {
   background: #ffc04a;
 }
