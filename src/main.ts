@@ -46,99 +46,100 @@ document.addEventListener("DOMContentLoaded", () => {
   root.appendChild(btnRow);
   document.body.appendChild(root);
 
-  // ====================================================
-  // DATA MODEL (expanded for undo/redo)
-  // ====================================================
-  type Point = { x: number; y: number };
-  type Stroke = Point[];
+  class MarkerLine {
+    private points: { x: number; y: number }[] = [];
 
-  const strokes: Stroke[] = []; // display list
-  const redoStack: Stroke[] = []; // undo → redo
+    constructor(startX: number, startY: number) {
+      this.points.push({ x: startX, y: startY });
+    }
 
-  let currentStroke: Stroke | null = null;
+    drag(x: number, y: number) {
+      this.points.push({ x, y });
+    }
+
+    display(ctx: CanvasRenderingContext2D) {
+      if (this.points.length < 2) return;
+
+      ctx.beginPath();
+      ctx.moveTo(this.points[0].x, this.points[0].y);
+
+      for (let i = 1; i < this.points.length; i++) {
+        ctx.lineTo(this.points[i].x, this.points[i].y);
+      }
+
+      ctx.stroke();
+    }
+  }
+
+  // Display list & undo/redo now store *command objects*
+  const displayList: MarkerLine[] = [];
+  const redoStack: MarkerLine[] = [];
+
+  let currentCommand: MarkerLine | null = null;
   let isDrawing = false;
 
-  // ====================================================
   // DRAWING OBSERVER
-  // ====================================================
   function redrawCanvas() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    ctx.beginPath();
-    for (const stroke of strokes) {
-      if (stroke.length === 0) continue;
-
-      ctx.moveTo(stroke[0].x, stroke[0].y);
-      for (let i = 1; i < stroke.length; i++) {
-        ctx.lineTo(stroke[i].x, stroke[i].y);
-      }
+    for (const cmd of displayList) {
+      cmd.display(ctx);
     }
-    ctx.stroke();
   }
 
   canvas.addEventListener("drawing-changed", redrawCanvas);
 
-  // ====================================================
-  // MOUSE EVENTS USING DATA MODEL
-  // ====================================================
+  // MOUSE EVENTS USING COMMAND OBJECTS
   canvas.addEventListener("mousedown", (e) => {
     isDrawing = true;
 
-    currentStroke = [];
-    strokes.push(currentStroke);
+    currentCommand = new MarkerLine(e.offsetX, e.offsetY);
+    displayList.push(currentCommand);
 
-    // Once you start drawing a new stroke, redo history is invalid
+    // Starting a new stroke clears redo history
     redoStack.length = 0;
-
-    currentStroke.push({ x: e.offsetX, y: e.offsetY });
 
     canvas.dispatchEvent(new Event("drawing-changed"));
   });
 
   canvas.addEventListener("mousemove", (e) => {
-    if (!isDrawing || !currentStroke) return;
+    if (!isDrawing || !currentCommand) return;
 
-    currentStroke.push({ x: e.offsetX, y: e.offsetY });
+    currentCommand.drag(e.offsetX, e.offsetY);
     canvas.dispatchEvent(new Event("drawing-changed"));
   });
 
   canvas.addEventListener("mouseup", () => {
     isDrawing = false;
-    currentStroke = null;
+    currentCommand = null;
   });
 
   canvas.addEventListener("mouseleave", () => {
     isDrawing = false;
-    currentStroke = null;
+    currentCommand = null;
   });
 
-  // ====================================================
   // BUTTONS
-  // ====================================================
-
-  // ----- CLEAR -----
   clearBtn.addEventListener("click", () => {
-    strokes.length = 0;
+    displayList.length = 0;
     redoStack.length = 0;
     canvas.dispatchEvent(new Event("drawing-changed"));
   });
 
-  // ----- UNDO -----
   undoBtn.addEventListener("click", () => {
-    if (strokes.length === 0) return; // nothing to undo
+    if (displayList.length === 0) return;
 
-    const undone = strokes.pop()!; // remove last stroke
-    redoStack.push(undone); // move it to redo stack
+    const undone = displayList.pop()!;
+    redoStack.push(undone);
 
     canvas.dispatchEvent(new Event("drawing-changed"));
   });
 
-  // ----- REDO -----
   redoBtn.addEventListener("click", () => {
-    if (redoStack.length === 0) return; // nothing to redo
+    if (redoStack.length === 0) return;
 
-    const restored = redoStack.pop()!; // take last undone stroke
-    strokes.push(restored); // add it back
+    const restored = redoStack.pop()!;
+    displayList.push(restored);
 
     canvas.dispatchEvent(new Event("drawing-changed"));
   });
