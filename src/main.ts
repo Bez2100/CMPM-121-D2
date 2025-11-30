@@ -1,27 +1,28 @@
 import "./style.css";
 
 document.addEventListener("DOMContentLoaded", () => {
-  // ----- Root container -----
+  // UI CREATION
   const root = document.createElement("div");
   root.className = "app-container";
 
-  // ----- Title -----
   const title = document.createElement("h1");
   title.className = "app-title";
   title.textContent = "Sketch Pad Town";
 
-  // ----- Canvas -----
   const canvas = document.createElement("canvas");
   canvas.className = "draw-canvas";
   canvas.width = 256;
   canvas.height = 256;
 
   const ctx = canvas.getContext("2d")!;
-  ctx.lineWidth = 4;
   ctx.lineCap = "round";
   ctx.strokeStyle = "#000";
 
-  // ----- Buttons -----
+  // Buttons
+  const clearBtn = document.createElement("button");
+  clearBtn.className = "clear-button";
+  clearBtn.textContent = "Clear";
+
   const undoBtn = document.createElement("button");
   undoBtn.className = "undo-button";
   undoBtn.textContent = "Undo";
@@ -29,10 +30,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const redoBtn = document.createElement("button");
   redoBtn.className = "redo-button";
   redoBtn.textContent = "Redo";
-
-  const clearBtn = document.createElement("button");
-  clearBtn.className = "clear-button";
-  clearBtn.textContent = "Clear";
 
   const thinBtn = document.createElement("button");
   thinBtn.className = "thin-button";
@@ -42,13 +39,12 @@ document.addEventListener("DOMContentLoaded", () => {
   thickBtn.className = "thick-button";
   thickBtn.textContent = "Thick";
 
-  // ----- Add elements to root -----
+  // Layout
   root.appendChild(title);
   root.appendChild(canvas);
 
   const btnRow = document.createElement("div");
   btnRow.className = "button-row";
-
   btnRow.appendChild(thinBtn);
   btnRow.appendChild(thickBtn);
   btnRow.appendChild(undoBtn);
@@ -58,123 +54,131 @@ document.addEventListener("DOMContentLoaded", () => {
   root.appendChild(btnRow);
   document.body.appendChild(root);
 
-  // COMMAND OBJECTS + Thickness Support
+  // DATA STRUCTURES
+  type Point = { x: number; y: number };
 
-  class MarkerLine {
-    private points: { x: number; y: number }[] = [];
-    private thickness: number;
-
-    constructor(startX: number, startY: number, thickness: number) {
-      this.thickness = thickness;
-      this.points.push({ x: startX, y: startY });
-    }
+  class MarkerStroke {
+    points: Point[] = [];
+    constructor(public thickness: number) {}
 
     drag(x: number, y: number) {
       this.points.push({ x, y });
     }
 
-    display(ctx: CanvasRenderingContext2D) {
-      if (this.points.length < 2) return;
-
+    draw(ctx: CanvasRenderingContext2D) {
+      if (this.points.length === 0) return;
+      ctx.save();
       ctx.lineWidth = this.thickness;
-      ctx.lineCap = "round";
-
       ctx.beginPath();
       ctx.moveTo(this.points[0].x, this.points[0].y);
-
       for (let i = 1; i < this.points.length; i++) {
         ctx.lineTo(this.points[i].x, this.points[i].y);
       }
-
       ctx.stroke();
+      ctx.restore();
     }
   }
 
-  // Display list & undo/redo
-  const displayList: MarkerLine[] = [];
-  const redoStack: MarkerLine[] = [];
+  class ToolPreview {
+    constructor(public x: number, public y: number, public radius: number) {}
 
-  let currentCommand: MarkerLine | null = null;
+    draw(ctx: CanvasRenderingContext2D) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(0,0,0,0.4)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  const strokes: MarkerStroke[] = [];
+  const redoStack: MarkerStroke[] = [];
+
+  let currentStroke: MarkerStroke | null = null;
   let isDrawing = false;
 
-  let currentThickness = 4;
+  let markerThickness = 4; // default
+  let toolPreview: ToolPreview | null = null;
 
-  // REDRAW OBSERVER
+  // REDRAW PIPELINE
   function redrawCanvas() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    for (const cmd of displayList) {
-      cmd.display(ctx);
+    // Draw all strokes
+    for (const stroke of strokes) {
+      stroke.draw(ctx);
+    }
+
+    // Draw preview if not drawing
+    if (!isDrawing && toolPreview) {
+      toolPreview.draw(ctx);
     }
   }
 
   canvas.addEventListener("drawing-changed", redrawCanvas);
+  canvas.addEventListener("tool-moved", redrawCanvas);
 
-  // MOUSE EVENTS USING COMMAND OBJECTS
+  // MOUSE EVENTS
   canvas.addEventListener("mousedown", (e) => {
     isDrawing = true;
-
-    currentCommand = new MarkerLine(e.offsetX, e.offsetY, currentThickness);
-    displayList.push(currentCommand);
-
-    // New stroke → redo history cleared
     redoStack.length = 0;
+
+    currentStroke = new MarkerStroke(markerThickness);
+    currentStroke.drag(e.offsetX, e.offsetY);
+    strokes.push(currentStroke);
 
     canvas.dispatchEvent(new Event("drawing-changed"));
   });
 
   canvas.addEventListener("mousemove", (e) => {
-    if (!isDrawing || !currentCommand) return;
-
-    currentCommand.drag(e.offsetX, e.offsetY);
-    canvas.dispatchEvent(new Event("drawing-changed"));
+    if (isDrawing && currentStroke) {
+      currentStroke.drag(e.offsetX, e.offsetY);
+      canvas.dispatchEvent(new Event("drawing-changed"));
+    } else {
+      // Update tool preview
+      toolPreview = new ToolPreview(e.offsetX, e.offsetY, markerThickness / 2);
+      canvas.dispatchEvent(new Event("tool-moved"));
+    }
   });
 
   canvas.addEventListener("mouseup", () => {
     isDrawing = false;
-    currentCommand = null;
+    currentStroke = null;
   });
 
   canvas.addEventListener("mouseleave", () => {
     isDrawing = false;
-    currentCommand = null;
+    currentStroke = null;
   });
 
-  // BUTTON ACTIONS
-
+  // BUTTON HANDLERS
   clearBtn.addEventListener("click", () => {
-    displayList.length = 0;
+    strokes.length = 0;
     redoStack.length = 0;
     canvas.dispatchEvent(new Event("drawing-changed"));
   });
 
   undoBtn.addEventListener("click", () => {
-    if (displayList.length === 0) return;
-
-    const undone = displayList.pop()!;
+    if (strokes.length === 0) return;
+    const undone = strokes.pop()!;
     redoStack.push(undone);
     canvas.dispatchEvent(new Event("drawing-changed"));
   });
 
   redoBtn.addEventListener("click", () => {
     if (redoStack.length === 0) return;
-
     const restored = redoStack.pop()!;
-    displayList.push(restored);
+    strokes.push(restored);
     canvas.dispatchEvent(new Event("drawing-changed"));
   });
 
   thinBtn.addEventListener("click", () => {
-    currentThickness = 2;
-    thinBtn.classList.add("selectedTool");
-    thickBtn.classList.remove("selectedTool");
+    markerThickness = 4;
   });
 
   thickBtn.addEventListener("click", () => {
-    currentThickness = 8;
-    thickBtn.classList.add("selectedTool");
-    thinBtn.classList.remove("selectedTool");
+    markerThickness = 10;
   });
-
-  thinBtn.classList.add("selectedTool");
 });
