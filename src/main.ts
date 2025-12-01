@@ -18,7 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ctx.lineCap = "round";
   ctx.strokeStyle = "#000";
 
-  // Buttons
+  // BUTTONS
   const clearBtn = document.createElement("button");
   clearBtn.className = "clear-button";
   clearBtn.textContent = "Clear";
@@ -39,14 +39,39 @@ document.addEventListener("DOMContentLoaded", () => {
   thickBtn.className = "thick-button";
   thickBtn.textContent = "Thick";
 
-  // Layout
+  // STEP 8: STICKER BUTTONS
+  const catBtn = document.createElement("button");
+  catBtn.className = "sticker-button";
+  catBtn.textContent = "🐱";
+
+  const car1Btn = document.createElement("button");
+  car1Btn.className = "sticker-button";
+  car1Btn.textContent = "🚗";
+
+  const car2Btn = document.createElement("button");
+  car2Btn.className = "sticker-button";
+  car2Btn.textContent = "🚙";
+
+  const buildingBtn = document.createElement("button");
+  buildingBtn.className = "sticker-button";
+  buildingBtn.textContent = "🏢";
+
+  // LAYOUT
   root.appendChild(title);
   root.appendChild(canvas);
 
   const btnRow = document.createElement("div");
   btnRow.className = "button-row";
+
   btnRow.appendChild(thinBtn);
   btnRow.appendChild(thickBtn);
+
+  // STEP 8: Add stickers
+  btnRow.appendChild(catBtn);
+  btnRow.appendChild(car1Btn);
+  btnRow.appendChild(car2Btn);
+  btnRow.appendChild(buildingBtn);
+
   btnRow.appendChild(undoBtn);
   btnRow.appendChild(redoBtn);
   btnRow.appendChild(clearBtn);
@@ -54,7 +79,10 @@ document.addEventListener("DOMContentLoaded", () => {
   root.appendChild(btnRow);
   document.body.appendChild(root);
 
+  // ======================
   // DATA STRUCTURES
+  // ======================
+
   type Point = { x: number; y: number };
 
   class MarkerStroke {
@@ -93,42 +121,84 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  const strokes: MarkerStroke[] = [];
-  const redoStack: MarkerStroke[] = [];
+  class StickerPreview {
+    constructor(public x: number, public y: number, public emoji: string) {}
 
-  let currentStroke: MarkerStroke | null = null;
+    draw(ctx: CanvasRenderingContext2D) {
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      ctx.font = "32px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(this.emoji, this.x, this.y);
+      ctx.restore();
+    }
+  }
+
+  class StickerCommand {
+    constructor(public x: number, public y: number, public emoji: string) {}
+
+    drag(x: number, y: number) {
+      this.x = x;
+      this.y = y;
+    }
+
+    draw(ctx: CanvasRenderingContext2D) {
+      ctx.save();
+      ctx.font = "32px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(this.emoji, this.x, this.y);
+      ctx.restore();
+    }
+  }
+
+  // === FIX: No `any` ===
+  type Command = MarkerStroke | StickerCommand;
+
+  const strokes: Command[] = [];
+  const redoStack: Command[] = [];
+
+  let currentStroke: Command | null = null;
   let isDrawing = false;
 
-  let markerThickness = 4; // default
-  let toolPreview: ToolPreview | null = null;
+  let markerThickness = 4;
+  let toolPreview: ToolPreview | StickerPreview | null = null;
 
-  // REDRAW PIPELINE
+  type Tool = "marker" | "sticker";
+  let activeTool: Tool = "marker";
+  let activeSticker: string | null = null;
+
+  // REDRAW
   function redrawCanvas() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw all strokes
-    for (const stroke of strokes) {
-      stroke.draw(ctx);
-    }
+    for (const item of strokes) item.draw(ctx);
 
-    // Draw preview if not drawing
-    if (!isDrawing && toolPreview) {
-      toolPreview.draw(ctx);
-    }
+    if (!isDrawing && toolPreview) toolPreview.draw(ctx);
   }
 
   canvas.addEventListener("drawing-changed", redrawCanvas);
   canvas.addEventListener("tool-moved", redrawCanvas);
 
+  // ======================
   // MOUSE EVENTS
+  // ======================
+
   canvas.addEventListener("mousedown", (e) => {
     isDrawing = true;
     redoStack.length = 0;
 
-    currentStroke = new MarkerStroke(markerThickness);
-    currentStroke.drag(e.offsetX, e.offsetY);
-    strokes.push(currentStroke);
+    if (activeTool === "marker") {
+      currentStroke = new MarkerStroke(markerThickness);
+      currentStroke.drag(e.offsetX, e.offsetY);
+    } else if (activeTool === "sticker" && activeSticker) {
+      currentStroke = new StickerCommand(e.offsetX, e.offsetY, activeSticker);
+    }
 
+    if (currentStroke !== null) {
+      strokes.push(currentStroke);
+    }
     canvas.dispatchEvent(new Event("drawing-changed"));
   });
 
@@ -137,8 +207,15 @@ document.addEventListener("DOMContentLoaded", () => {
       currentStroke.drag(e.offsetX, e.offsetY);
       canvas.dispatchEvent(new Event("drawing-changed"));
     } else {
-      // Update tool preview
-      toolPreview = new ToolPreview(e.offsetX, e.offsetY, markerThickness / 2);
+      if (activeTool === "marker") {
+        toolPreview = new ToolPreview(
+          e.offsetX,
+          e.offsetY,
+          markerThickness / 2,
+        );
+      } else if (activeTool === "sticker" && activeSticker) {
+        toolPreview = new StickerPreview(e.offsetX, e.offsetY, activeSticker);
+      }
       canvas.dispatchEvent(new Event("tool-moved"));
     }
   });
@@ -153,7 +230,10 @@ document.addEventListener("DOMContentLoaded", () => {
     currentStroke = null;
   });
 
-  // BUTTON HANDLERS
+  // ======================
+  // BUTTONS
+  // ======================
+
   clearBtn.addEventListener("click", () => {
     strokes.length = 0;
     redoStack.length = 0;
@@ -161,24 +241,51 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   undoBtn.addEventListener("click", () => {
-    if (strokes.length === 0) return;
-    const undone = strokes.pop()!;
-    redoStack.push(undone);
-    canvas.dispatchEvent(new Event("drawing-changed"));
+    if (strokes.length > 0) {
+      const undone = strokes.pop()!;
+      redoStack.push(undone);
+      canvas.dispatchEvent(new Event("drawing-changed"));
+    }
   });
 
   redoBtn.addEventListener("click", () => {
-    if (redoStack.length === 0) return;
-    const restored = redoStack.pop()!;
-    strokes.push(restored);
-    canvas.dispatchEvent(new Event("drawing-changed"));
+    if (redoStack.length > 0) {
+      const restored = redoStack.pop()!;
+      strokes.push(restored);
+      canvas.dispatchEvent(new Event("drawing-changed"));
+    }
   });
 
   thinBtn.addEventListener("click", () => {
+    activeTool = "marker";
+    activeSticker = null;
     markerThickness = 4;
   });
 
   thickBtn.addEventListener("click", () => {
+    activeTool = "marker";
+    activeSticker = null;
     markerThickness = 10;
+  });
+
+  // STEP 8: Sticker selection
+  catBtn.addEventListener("click", () => {
+    activeTool = "sticker";
+    activeSticker = "🐱";
+  });
+
+  car1Btn.addEventListener("click", () => {
+    activeTool = "sticker";
+    activeSticker = "🚗";
+  });
+
+  car2Btn.addEventListener("click", () => {
+    activeTool = "sticker";
+    activeSticker = "🚙";
+  });
+
+  buildingBtn.addEventListener("click", () => {
+    activeTool = "sticker";
+    activeSticker = "🏢";
   });
 });
