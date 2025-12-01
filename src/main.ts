@@ -1,7 +1,9 @@
 import "./style.css";
 
 document.addEventListener("DOMContentLoaded", () => {
+  // ==========================
   // UI CREATION
+  // ==========================
   const root = document.createElement("div");
   root.className = "app-container";
 
@@ -18,7 +20,9 @@ document.addEventListener("DOMContentLoaded", () => {
   ctx.lineCap = "round";
   ctx.strokeStyle = "#000";
 
-  // BUTTONS
+  // --------------------------
+  // Buttons
+  // --------------------------
   const clearBtn = document.createElement("button");
   clearBtn.className = "clear-button";
   clearBtn.textContent = "Clear";
@@ -39,39 +43,30 @@ document.addEventListener("DOMContentLoaded", () => {
   thickBtn.className = "thick-button";
   thickBtn.textContent = "Thick";
 
-  // STEP 8: STICKER BUTTONS
-  const catBtn = document.createElement("button");
-  catBtn.className = "sticker-button";
-  catBtn.textContent = "🐱";
+  // === STEP 9: Sticker system ===
+  interface StickerDef {
+    emoji: string;
+  }
 
-  const car1Btn = document.createElement("button");
-  car1Btn.className = "sticker-button";
-  car1Btn.textContent = "🚗";
+  const stickerList: StickerDef[] = [
+    { emoji: "🐱" },
+    { emoji: "🚗" },
+    { emoji: "🚙" },
+    { emoji: "🏢" },
+  ];
 
-  const car2Btn = document.createElement("button");
-  car2Btn.className = "sticker-button";
-  car2Btn.textContent = "🚙";
+  const stickerBtnRow = document.createElement("div");
+  stickerBtnRow.className = "button-row";
 
-  const buildingBtn = document.createElement("button");
-  buildingBtn.className = "sticker-button";
-  buildingBtn.textContent = "🏢";
-
-  // LAYOUT
   root.appendChild(title);
   root.appendChild(canvas);
+  root.appendChild(stickerBtnRow); // container for stickers
 
   const btnRow = document.createElement("div");
   btnRow.className = "button-row";
 
   btnRow.appendChild(thinBtn);
   btnRow.appendChild(thickBtn);
-
-  // STEP 8: Add stickers
-  btnRow.appendChild(catBtn);
-  btnRow.appendChild(car1Btn);
-  btnRow.appendChild(car2Btn);
-  btnRow.appendChild(buildingBtn);
-
   btnRow.appendChild(undoBtn);
   btnRow.appendChild(redoBtn);
   btnRow.appendChild(clearBtn);
@@ -79,20 +74,22 @@ document.addEventListener("DOMContentLoaded", () => {
   root.appendChild(btnRow);
   document.body.appendChild(root);
 
-  // ======================
-  // DATA STRUCTURES
-  // ======================
-
+  // --------------------------
+  // Commands / Data
+  // --------------------------
   type Point = { x: number; y: number };
 
-  class MarkerStroke {
+  interface Command {
+    drag(x: number, y: number): void;
+    draw(ctx: CanvasRenderingContext2D): void;
+  }
+
+  class MarkerStroke implements Command {
     points: Point[] = [];
     constructor(public thickness: number) {}
-
     drag(x: number, y: number) {
       this.points.push({ x, y });
     }
-
     draw(ctx: CanvasRenderingContext2D) {
       if (this.points.length === 0) return;
       ctx.save();
@@ -109,7 +106,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   class ToolPreview {
     constructor(public x: number, public y: number, public radius: number) {}
-
     draw(ctx: CanvasRenderingContext2D) {
       ctx.save();
       ctx.strokeStyle = "rgba(0,0,0,0.4)";
@@ -123,7 +119,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   class StickerPreview {
     constructor(public x: number, public y: number, public emoji: string) {}
-
     draw(ctx: CanvasRenderingContext2D) {
       ctx.save();
       ctx.globalAlpha = 0.5;
@@ -135,14 +130,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  class StickerCommand {
+  class StickerCommand implements Command {
     constructor(public x: number, public y: number, public emoji: string) {}
-
     drag(x: number, y: number) {
       this.x = x;
       this.y = y;
     }
-
     draw(ctx: CanvasRenderingContext2D) {
       ctx.save();
       ctx.font = "32px sans-serif";
@@ -153,15 +146,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // === FIX: No `any` ===
-  type Command = MarkerStroke | StickerCommand;
-
   const strokes: Command[] = [];
   const redoStack: Command[] = [];
 
   let currentStroke: Command | null = null;
   let isDrawing = false;
-
   let markerThickness = 4;
   let toolPreview: ToolPreview | StickerPreview | null = null;
 
@@ -169,22 +158,58 @@ document.addEventListener("DOMContentLoaded", () => {
   let activeTool: Tool = "marker";
   let activeSticker: string | null = null;
 
-  // REDRAW
+  // --------------------------
+  // Sticker rendering helper
+  // --------------------------
+  function renderStickerButtons() {
+    stickerBtnRow.innerHTML = "";
+    for (const sticker of stickerList) {
+      const btn = document.createElement("button");
+      btn.className = "sticker-button";
+      btn.textContent = sticker.emoji;
+      btn.addEventListener("click", () => {
+        activeTool = "sticker";
+        activeSticker = sticker.emoji;
+      });
+      stickerBtnRow.appendChild(btn);
+    }
+  }
+  renderStickerButtons();
+
+  const customStickerBtn = document.createElement("button");
+  customStickerBtn.className = "sticker-button";
+  customStickerBtn.textContent = "➕ Sticker";
+  btnRow.appendChild(customStickerBtn);
+
+  customStickerBtn.addEventListener("click", () => {
+    const input = prompt("Enter custom sticker emoji:", "⭐");
+    if (!input || input.trim().length === 0) return;
+
+    stickerList.push({ emoji: input });
+    renderStickerButtons();
+  });
+
+  // --------------------------
+  // Drawing pipeline
+  // --------------------------
   function redrawCanvas() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    for (const item of strokes) item.draw(ctx);
+    for (const item of strokes) {
+      item.draw(ctx);
+    }
 
-    if (!isDrawing && toolPreview) toolPreview.draw(ctx);
+    if (!isDrawing && toolPreview) {
+      toolPreview.draw(ctx);
+    }
   }
 
   canvas.addEventListener("drawing-changed", redrawCanvas);
   canvas.addEventListener("tool-moved", redrawCanvas);
 
-  // ======================
-  // MOUSE EVENTS
-  // ======================
-
+  // --------------------------
+  // Mouse events
+  // --------------------------
   canvas.addEventListener("mousedown", (e) => {
     isDrawing = true;
     redoStack.length = 0;
@@ -196,9 +221,7 @@ document.addEventListener("DOMContentLoaded", () => {
       currentStroke = new StickerCommand(e.offsetX, e.offsetY, activeSticker);
     }
 
-    if (currentStroke !== null) {
-      strokes.push(currentStroke);
-    }
+    if (currentStroke) strokes.push(currentStroke);
     canvas.dispatchEvent(new Event("drawing-changed"));
   });
 
@@ -230,10 +253,9 @@ document.addEventListener("DOMContentLoaded", () => {
     currentStroke = null;
   });
 
-  // ======================
-  // BUTTONS
-  // ======================
-
+  // --------------------------
+  // Button handlers
+  // --------------------------
   clearBtn.addEventListener("click", () => {
     strokes.length = 0;
     redoStack.length = 0;
@@ -241,19 +263,17 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   undoBtn.addEventListener("click", () => {
-    if (strokes.length > 0) {
-      const undone = strokes.pop()!;
-      redoStack.push(undone);
-      canvas.dispatchEvent(new Event("drawing-changed"));
-    }
+    if (strokes.length === 0) return;
+    const undone = strokes.pop()!;
+    redoStack.push(undone);
+    canvas.dispatchEvent(new Event("drawing-changed"));
   });
 
   redoBtn.addEventListener("click", () => {
-    if (redoStack.length > 0) {
-      const restored = redoStack.pop()!;
-      strokes.push(restored);
-      canvas.dispatchEvent(new Event("drawing-changed"));
-    }
+    if (redoStack.length === 0) return;
+    const restored = redoStack.pop()!;
+    strokes.push(restored);
+    canvas.dispatchEvent(new Event("drawing-changed"));
   });
 
   thinBtn.addEventListener("click", () => {
@@ -266,26 +286,5 @@ document.addEventListener("DOMContentLoaded", () => {
     activeTool = "marker";
     activeSticker = null;
     markerThickness = 10;
-  });
-
-  // STEP 8: Sticker selection
-  catBtn.addEventListener("click", () => {
-    activeTool = "sticker";
-    activeSticker = "🐱";
-  });
-
-  car1Btn.addEventListener("click", () => {
-    activeTool = "sticker";
-    activeSticker = "🚗";
-  });
-
-  car2Btn.addEventListener("click", () => {
-    activeTool = "sticker";
-    activeSticker = "🚙";
-  });
-
-  buildingBtn.addEventListener("click", () => {
-    activeTool = "sticker";
-    activeSticker = "🏢";
   });
 });
