@@ -43,7 +43,13 @@ document.addEventListener("DOMContentLoaded", () => {
   thickBtn.className = "thick-button";
   thickBtn.textContent = "Thick";
 
-  // === STEP 9: Sticker system ===
+  const exportBtn = document.createElement("button");
+  exportBtn.className = "export-button";
+  exportBtn.textContent = "Export PNG";
+
+  // ==========================
+  // Sticker system
+  // ==========================
   interface StickerDef {
     emoji: string;
   }
@@ -60,7 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   root.appendChild(title);
   root.appendChild(canvas);
-  root.appendChild(stickerBtnRow); // container for stickers
+  root.appendChild(stickerBtnRow);
 
   const btnRow = document.createElement("div");
   btnRow.className = "button-row";
@@ -70,13 +76,14 @@ document.addEventListener("DOMContentLoaded", () => {
   btnRow.appendChild(undoBtn);
   btnRow.appendChild(redoBtn);
   btnRow.appendChild(clearBtn);
+  btnRow.appendChild(exportBtn);
 
   root.appendChild(btnRow);
   document.body.appendChild(root);
 
-  // --------------------------
+  // ==========================
   // Commands / Data
-  // --------------------------
+  // ==========================
   type Point = { x: number; y: number };
 
   interface Command {
@@ -158,9 +165,9 @@ document.addEventListener("DOMContentLoaded", () => {
   let activeTool: Tool = "marker";
   let activeSticker: string | null = null;
 
-  // --------------------------
-  // Sticker rendering helper
-  // --------------------------
+  // ==========================
+  // Sticker rendering
+  // ==========================
   function renderStickerButtons() {
     stickerBtnRow.innerHTML = "";
     for (const sticker of stickerList) {
@@ -184,21 +191,18 @@ document.addEventListener("DOMContentLoaded", () => {
   customStickerBtn.addEventListener("click", () => {
     const input = prompt("Enter custom sticker emoji:", "⭐");
     if (!input || input.trim().length === 0) return;
-
     stickerList.push({ emoji: input });
     renderStickerButtons();
   });
 
-  // --------------------------
+  // ==========================
   // Drawing pipeline
-  // --------------------------
+  // ==========================
   function redrawCanvas() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
     for (const item of strokes) {
       item.draw(ctx);
     }
-
     if (!isDrawing && toolPreview) {
       toolPreview.draw(ctx);
     }
@@ -207,9 +211,9 @@ document.addEventListener("DOMContentLoaded", () => {
   canvas.addEventListener("drawing-changed", redrawCanvas);
   canvas.addEventListener("tool-moved", redrawCanvas);
 
-  // --------------------------
+  // ==========================
   // Mouse events
-  // --------------------------
+  // ==========================
   canvas.addEventListener("mousedown", (e) => {
     isDrawing = true;
     redoStack.length = 0;
@@ -253,9 +257,9 @@ document.addEventListener("DOMContentLoaded", () => {
     currentStroke = null;
   });
 
-  // --------------------------
+  // ==========================
   // Button handlers
-  // --------------------------
+  // ==========================
   clearBtn.addEventListener("click", () => {
     strokes.length = 0;
     redoStack.length = 0;
@@ -286,5 +290,28 @@ document.addEventListener("DOMContentLoaded", () => {
     activeTool = "marker";
     activeSticker = null;
     markerThickness = 10;
+  });
+
+  exportBtn.addEventListener("click", () => {
+    const scale = 4;
+    const exportCanvas = document.createElement("canvas");
+    exportCanvas.width = canvas.width * scale;
+    exportCanvas.height = canvas.height * scale;
+    const exportCtx = exportCanvas.getContext("2d")!;
+    exportCtx.scale(scale, scale);
+
+    for (const item of strokes) {
+      item.draw(exportCtx);
+    }
+
+    exportCanvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "sketch.png";
+      link.click();
+      URL.revokeObjectURL(url);
+    });
   });
 });
