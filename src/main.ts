@@ -1,7 +1,9 @@
 import "./style.css";
 
 document.addEventListener("DOMContentLoaded", () => {
-  // ====== UI CREATION ======
+  // =======================
+  // UI CREATION
+  // =======================
   const root = document.createElement("div");
   root.className = "app-container";
 
@@ -9,16 +11,22 @@ document.addEventListener("DOMContentLoaded", () => {
   title.className = "app-title";
   title.textContent = "Sketch Pad Town";
 
+  // canvas + tools container
+  const canvasToolsContainer = document.createElement("div");
+  canvasToolsContainer.className = "canvas-tools-container";
+
   const canvas = document.createElement("canvas");
   canvas.className = "draw-canvas";
   canvas.width = 256;
   canvas.height = 256;
   const ctx = canvas.getContext("2d")!;
   ctx.lineCap = "round";
-  ctx.strokeStyle = "#000";
 
-  // ====== Buttons ======
-  // Marker buttons
+  // Button column (left of canvas)
+  const buttonColumn = document.createElement("div");
+  buttonColumn.className = "button-column";
+
+  // ====== Marker buttons ======
   const thinBtn = document.createElement("button");
   thinBtn.className = "thin-button";
   thinBtn.textContent = "Thin Brush";
@@ -27,29 +35,35 @@ document.addEventListener("DOMContentLoaded", () => {
   thickBtn.className = "thick-button";
   thickBtn.textContent = "Thick Brush";
 
-  // Sticker buttons
-  const catBtn = document.createElement("button");
-  catBtn.className = "sticker-button";
-  catBtn.textContent = "🐱";
+  buttonColumn.appendChild(thinBtn);
+  buttonColumn.appendChild(thickBtn);
 
-  const car1Btn = document.createElement("button");
-  car1Btn.className = "sticker-button";
-  car1Btn.textContent = "🚗";
+  // ====== Sticker buttons ======
+  const stickers = ["🐱", "🚗", "🚙", "🏢"];
+  const stickerButtons: HTMLButtonElement[] = [];
 
-  const car2Btn = document.createElement("button");
-  car2Btn.className = "sticker-button";
-  car2Btn.textContent = "🚙";
+  stickers.forEach((emoji) => {
+    const btn = document.createElement("button");
+    btn.className = "sticker-button";
+    btn.textContent = emoji;
+    buttonColumn.appendChild(btn);
+    stickerButtons.push(btn);
+  });
 
-  const buildingBtn = document.createElement("button");
-  buildingBtn.className = "sticker-button";
-  buildingBtn.textContent = "🏢";
-
-  // Custom sticker
+  // custom sticker button
   const customStickerBtn = document.createElement("button");
   customStickerBtn.className = "sticker-button";
-  customStickerBtn.textContent = "Custom ➕";
+  customStickerBtn.textContent = "+";
+  buttonColumn.appendChild(customStickerBtn);
 
-  // Bottom buttons
+  // Add canvas and button column
+  canvasToolsContainer.appendChild(buttonColumn);
+  canvasToolsContainer.appendChild(canvas);
+
+  // bottom buttons row
+  const bottomButtons = document.createElement("div");
+  bottomButtons.className = "bottom-buttons";
+
   const undoBtn = document.createElement("button");
   undoBtn.className = "undo-button";
   undoBtn.textContent = "Undo";
@@ -62,52 +76,33 @@ document.addEventListener("DOMContentLoaded", () => {
   clearBtn.className = "clear-button";
   clearBtn.textContent = "Clear";
 
-  // ====== Layout ======
-  root.appendChild(title);
-
-  // Left column (brush + stickers)
-  const buttonColumn = document.createElement("div");
-  buttonColumn.className = "button-column";
-  buttonColumn.appendChild(thinBtn);
-  buttonColumn.appendChild(thickBtn);
-  buttonColumn.appendChild(catBtn);
-  buttonColumn.appendChild(car1Btn);
-  buttonColumn.appendChild(car2Btn);
-  buttonColumn.appendChild(buildingBtn);
-  buttonColumn.appendChild(customStickerBtn);
-
-  // Container for canvas + left buttons
-  const canvasToolsContainer = document.createElement("div");
-  canvasToolsContainer.className = "canvas-tools-container";
-  canvasToolsContainer.appendChild(buttonColumn);
-  canvasToolsContainer.appendChild(canvas);
-
-  root.appendChild(canvasToolsContainer);
-
-  // Bottom row buttons
-  const bottomButtons = document.createElement("div");
-  bottomButtons.className = "bottom-buttons";
   bottomButtons.appendChild(undoBtn);
   bottomButtons.appendChild(redoBtn);
   bottomButtons.appendChild(clearBtn);
 
+  root.appendChild(title);
+  root.appendChild(canvasToolsContainer);
   root.appendChild(bottomButtons);
-
   document.body.appendChild(root);
 
-  // ====== DATA STRUCTURES ======
+  // =======================
+  // DATA STRUCTURES
+  // =======================
   type Point = { x: number; y: number };
 
   class MarkerStroke {
     points: Point[] = [];
-    constructor(public thickness: number) {}
+    constructor(public thickness: number, public color: string) {}
+
     drag(x: number, y: number) {
       this.points.push({ x, y });
     }
+
     draw(ctx: CanvasRenderingContext2D) {
       if (this.points.length === 0) return;
       ctx.save();
       ctx.lineWidth = this.thickness;
+      ctx.strokeStyle = this.color;
       ctx.beginPath();
       ctx.moveTo(this.points[0].x, this.points[0].y);
       for (let i = 1; i < this.points.length; i++) {
@@ -118,11 +113,39 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  class ToolPreview {
-    constructor(public x: number, public y: number, public radius: number) {}
+  class StickerCommand {
+    constructor(
+      public x: number,
+      public y: number,
+      public emoji: string,
+      public rotation: number,
+    ) {}
+    drag(x: number, y: number) {
+      this.x = x;
+      this.y = y;
+    }
     draw(ctx: CanvasRenderingContext2D) {
       ctx.save();
-      ctx.strokeStyle = "rgba(0,0,0,0.4)";
+      ctx.translate(this.x, this.y);
+      ctx.rotate(this.rotation);
+      ctx.font = "32px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(this.emoji, 0, 0);
+      ctx.restore();
+    }
+  }
+
+  class ToolPreview {
+    constructor(
+      public x: number,
+      public y: number,
+      public radius: number,
+      public color?: string,
+    ) {}
+    draw(ctx: CanvasRenderingContext2D) {
+      ctx.save();
+      ctx.strokeStyle = this.color ?? "rgba(0,0,0,0.4)";
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
@@ -132,30 +155,21 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   class StickerPreview {
-    constructor(public x: number, public y: number, public emoji: string) {}
+    constructor(
+      public x: number,
+      public y: number,
+      public emoji: string,
+      public rotation: number,
+    ) {}
     draw(ctx: CanvasRenderingContext2D) {
       ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.rotate(this.rotation);
       ctx.globalAlpha = 0.5;
       ctx.font = "32px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(this.emoji, this.x, this.y);
-      ctx.restore();
-    }
-  }
-
-  class StickerCommand {
-    constructor(public x: number, public y: number, public emoji: string) {}
-    drag(x: number, y: number) {
-      this.x = x;
-      this.y = y;
-    }
-    draw(ctx: CanvasRenderingContext2D) {
-      ctx.save();
-      ctx.font = "32px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(this.emoji, this.x, this.y);
+      ctx.fillText(this.emoji, 0, 0);
       ctx.restore();
     }
   }
@@ -166,14 +180,34 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentStroke: MarkerStroke | StickerCommand | null = null;
   let isDrawing = false;
 
-  let markerThickness = 4;
-  let toolPreview: ToolPreview | StickerPreview | null = null;
-
+  // =======================
+  // TOOL STATE
+  // =======================
   type Tool = "marker" | "sticker";
   let activeTool: Tool = "marker";
   let activeSticker: string | null = null;
 
-  // ====== REDRAW ======
+  let markerThickness = 4;
+  let nextMarkerColor = "black";
+  let nextStickerRotation = 0;
+
+  let toolPreview: ToolPreview | StickerPreview | null = null;
+
+  // =======================
+  // UTILITY
+  // =======================
+  function getRandomColor(): string {
+    const hue = Math.floor(Math.random() * 360);
+    return `hsl(${hue}, 80%, 50%)`;
+  }
+
+  function getRandomRotation(): number {
+    return (Math.random() - 0.5) * Math.PI / 2; // -90° to 90°
+  }
+
+  // =======================
+  // REDRAW
+  // =======================
   function redrawCanvas() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (const item of strokes) {
@@ -187,21 +221,26 @@ document.addEventListener("DOMContentLoaded", () => {
   canvas.addEventListener("drawing-changed", redrawCanvas);
   canvas.addEventListener("tool-moved", redrawCanvas);
 
-  // ====== MOUSE EVENTS ======
+  // =======================
+  // MOUSE EVENTS
+  // =======================
   canvas.addEventListener("mousedown", (e) => {
     isDrawing = true;
     redoStack.length = 0;
 
     if (activeTool === "marker") {
-      currentStroke = new MarkerStroke(markerThickness);
+      currentStroke = new MarkerStroke(markerThickness, nextMarkerColor);
       currentStroke.drag(e.offsetX, e.offsetY);
     } else if (activeTool === "sticker" && activeSticker) {
-      currentStroke = new StickerCommand(e.offsetX, e.offsetY, activeSticker);
+      currentStroke = new StickerCommand(
+        e.offsetX,
+        e.offsetY,
+        activeSticker,
+        nextStickerRotation,
+      );
     }
 
-    if (currentStroke) {
-      strokes.push(currentStroke);
-    }
+    strokes.push(currentStroke!);
     canvas.dispatchEvent(new Event("drawing-changed"));
   });
 
@@ -215,9 +254,15 @@ document.addEventListener("DOMContentLoaded", () => {
           e.offsetX,
           e.offsetY,
           markerThickness / 2,
+          nextMarkerColor,
         );
       } else if (activeTool === "sticker" && activeSticker) {
-        toolPreview = new StickerPreview(e.offsetX, e.offsetY, activeSticker);
+        toolPreview = new StickerPreview(
+          e.offsetX,
+          e.offsetY,
+          activeSticker,
+          nextStickerRotation,
+        );
       }
       canvas.dispatchEvent(new Event("tool-moved"));
     }
@@ -233,13 +278,52 @@ document.addEventListener("DOMContentLoaded", () => {
     currentStroke = null;
   });
 
-  // ====== BUTTON HANDLERS ======
-  clearBtn.addEventListener("click", () => {
-    strokes.length = 0;
-    redoStack.length = 0;
-    canvas.dispatchEvent(new Event("drawing-changed"));
+  // =======================
+  // BUTTON HANDLERS
+  // =======================
+  // Marker buttons
+  thinBtn.addEventListener("click", () => {
+    activeTool = "marker";
+    activeSticker = null;
+    markerThickness = 4;
+    nextMarkerColor = getRandomColor();
   });
 
+  thickBtn.addEventListener("click", () => {
+    activeTool = "marker";
+    activeSticker = null;
+    markerThickness = 10;
+    nextMarkerColor = getRandomColor();
+  });
+
+  // Sticker buttons
+  stickerButtons.forEach((btn, i) => {
+    btn.addEventListener("click", () => {
+      activeTool = "sticker";
+      activeSticker = stickers[i];
+      nextStickerRotation = getRandomRotation();
+    });
+  });
+
+  customStickerBtn.addEventListener("click", () => {
+    const input = prompt("Enter custom sticker emoji", "🧽");
+    if (input) {
+      stickers.push(input);
+      const btn = document.createElement("button");
+      btn.className = "sticker-button";
+      btn.textContent = input;
+      buttonColumn.insertBefore(btn, customStickerBtn); // insert before custom button
+      stickerButtons.push(btn);
+
+      btn.addEventListener("click", () => {
+        activeTool = "sticker";
+        activeSticker = input;
+        nextStickerRotation = getRandomRotation();
+      });
+    }
+  });
+
+  // Undo/Redo/Clear
   undoBtn.addEventListener("click", () => {
     if (strokes.length === 0) return;
     const undone = strokes.pop()!;
@@ -254,35 +338,9 @@ document.addEventListener("DOMContentLoaded", () => {
     canvas.dispatchEvent(new Event("drawing-changed"));
   });
 
-  thinBtn.addEventListener("click", () => {
-    activeTool = "marker";
-    activeSticker = null;
-    markerThickness = 4;
-  });
-
-  thickBtn.addEventListener("click", () => {
-    activeTool = "marker";
-    activeSticker = null;
-    markerThickness = 10;
-  });
-
-  // Sticker buttons
-  const stickerButtons = [catBtn, car1Btn, car2Btn, buildingBtn];
-  const stickerEmojis = ["🐱", "🚗", "🚙", "🏢"];
-
-  stickerButtons.forEach((btn, i) => {
-    btn.addEventListener("click", () => {
-      activeTool = "sticker";
-      activeSticker = stickerEmojis[i];
-    });
-  });
-
-  // Custom sticker button
-  customStickerBtn.addEventListener("click", () => {
-    const text = prompt("Custom sticker text", "🧽");
-    if (text) {
-      activeTool = "sticker";
-      activeSticker = text;
-    }
+  clearBtn.addEventListener("click", () => {
+    strokes.length = 0;
+    redoStack.length = 0;
+    canvas.dispatchEvent(new Event("drawing-changed"));
   });
 });
