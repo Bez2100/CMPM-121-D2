@@ -24,6 +24,29 @@ body {
   margin: 0;
 }
 
+/* container for canvas + tools */
+.canvas-tools-container {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+/* left column: stickers + brush */
+.button-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 80px; /* fixed width for alignment */
+}
+
+/* bottom buttons row */
+.bottom-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 /* canvas style (required: border) */
 .draw-canvas {
   width: 256px;
@@ -32,12 +55,15 @@ body {
   border-radius: 8px; /* optional */
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15));
 }
+
+/* generic button styles */
 .clear-button,
 .redo-button,
 .undo-button,
 .thin-button,
 .thick-button,
-.export-button {
+.export-button,
+.sticker-button {
   padding: 8px 16px;
   font-size: 1rem;
   cursor: pointer;
@@ -52,19 +78,7 @@ body {
 .redo-button:hover,
 .thin-button:hover,
 .thick-button:hover,
-.export-button:hover {
-  background: #ffc04a;
-}
-.sticker-button {
-  padding: 8px 16px;
-  font-size: 1rem;
-  cursor: pointer;
-  border: 2px solid black;
-  border-radius: 6px;
-  background: #ffce73;
-  transition: 0.2s;
-}
-
+.export-button:hover,
 .sticker-button:hover {
   background: #ffc04a;
 }
